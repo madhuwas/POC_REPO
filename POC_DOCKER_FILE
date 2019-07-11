@@ -1,0 +1,34 @@
+===========================================================================================
+FROM ubuntu
+RUN apt-get update && apt-get install -y wget openjdk-8-jdk
+ENV CATALINA_HOME /usr/local/tomcat
+ENV PATH $CATALINA_HOME/bin:$PATH
+ENV TOMCAT_VERSION 7.0.90
+ENV TOMCAT_URL https://archive.apache.org/dist/tomcat/tomcat-7/v7.0.90/bin/
+RUN wget -qO- "$TOMCAT_URL/apache-tomcat-$TOMCAT_VERSION.tar.gz" | tar xvz -C /usr/local
+RUN ln -s /usr/local/apache-tomcat-7.0.90 $CATALINA_HOME
+COPY madhu.war /usr/local/apache-tomcat-7.0.90/webapps
+EXPOSE 8080
+CMD ["/usr/local/tomcat/bin/catalina.sh", "run"]
+===========================================================================================
+
+
+vi dockerfile
+
+To Build Tomcat image:
+
+docker build -t madhudsn/poc:tomcatv0.1 .
+
+Login in docker hub:
+docker login
+
+Username:madhudsn
+Password:MWProd@1mc
+
+To Push docker image:
+docker push madhudsn/poc:tomcatv0.1
+
+To Run a container:
+docker run -d --name tomcat -p 9090:8080 madhudsn/poc:tomcatv0.1
+
+===========================================================================================
