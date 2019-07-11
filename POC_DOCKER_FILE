@@ -32,3 +32,6 @@ To Run a container:
 docker run -d --name tomcat -p 9090:8080 madhudsn/poc:tomcatv0.1
 
 ===========================================================================================
+URL
+
+http://ec2-18-223-210-139.us-east-2.compute.amazonaws.com:9090/madhu/
