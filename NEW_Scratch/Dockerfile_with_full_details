@@ -1,0 +1,122 @@
+FROM scratch
+
+# Uses the zipped ubuntu os from current directory
+
+ADD ubuntu-xenial-core-cloudimg-amd64-root.tar.gz /
+
+# Deletes all the apt list files since they're big and get stale quickly
+
+RUN rm -rf /var/lib/apt/lists/*
+RUN set -xe \
+
+        \
+
+# Creates the runlevel policies
+
+# Shebang defines the docker should start with bash or els the OS will try to execute it as a “normal” binary 
+
+        && echo '#!/bin/sh' > /usr/sbin/policy-rc.d \
+
+# An exit status of 101 means “action not allowed", like to prevent services from being started automatically 
+# When you install packages with dpkg, apt, etc., just do this (as root)		
+
+        && echo 'exit 101' >> /usr/sbin/policy-rc.d \
+
+# Providing the execute privilage 
+
+        && chmod +x /usr/sbin/policy-rc.d \
+
+        \
+
+# This means, that there are no exceptions, and whatever package is installed, the file is diverted.
+
+        && dpkg-divert --local --rename --add /sbin/initctl \
+		
+# Copies the policy file to initctl, So policies execute in Server upstart		
+
+        && cp -a /usr/sbin/policy-rc.d /sbin/initctl \
+
+# an exit status of 0 means “actions allowed" in the upstart		
+
+        && sed -i 's/^exit.*/exit 0/' /sbin/initctl \
+
+        \
+
+# Temporarily disable dpkg fsync to make building faster.
+
+        && echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/docker-apt-speedup \
+
+        \
+
+# DPkg::Post-Invoke, which is invoked after every execution of dpkg (by an apt tool, not manually);
+
+
+        && echo 'DPkg::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' > /etc/apt/apt.conf.d/docker-clean \
+
+# APT::Update::Post-Invoke, which is invoked after updates, successful or otherwise (after the previous hook in the former case).
+
+        && echo 'APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' >> /etc/apt/apt.conf.d/docker-clean \
+
+# 'Dir::Cache::pkgcache/srcpkgcache , which is free up a lot of space as every package is downloaded and stored in the cache archive.
+
+        && echo 'Dir::Cache::pkgcache ""; Dir::Cache::srcpkgcache "";' >> /etc/apt/apt.conf.d/docker-clean \
+
+        \
+
+# Skiping the Translations files
+
+        && echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/docker-no-languages \
+
+        \
+
+# During apt-get updates, list files are being gzipped for smaller size
+
+        && echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > /etc/apt/apt.conf.d/docker-gzip-indexes \
+
+        \
+
+# update autoremove configuration to be aggressive about removing suggests deps that weren't manually installed
+
+        && echo 'Apt::AutoRemove::SuggestsImportant "false";' > /etc/apt/apt.conf.d/docker-autoremove-suggests
+
+
+
+# make systemd-detect-virt return "docker"
+
+# See: https://github.com/systemd/systemd/blob/aa0c34279ee40bce2f9681b496922dedbadfca19/src/basic/virt.c#L434
+
+RUN mkdir -p /run/systemd && echo 'docker' > /run/systemd/container
+
+# Update and installs wget and JDK
+
+RUN apt-get update && apt-get install -y wget openjdk-8-jdk
+
+# Defining the CATALINA_HOME env as an variable 
+
+ENV CATALINA_HOME /usr/local/tomcat
+
+ENV PATH $CATALINA_HOME/bin:$PATH
+
+# Defining the tomcat archive url as an env variable 
+
+ENV TOMCAT_URL https://archive.apache.org/dist/tomcat/tomcat-7/v7.0.90/bin/
+
+# Downloading the tomcat tar file 
+
+RUN wget -qO- "$TOMCAT_URL/apache-tomcat-$TOMCAT_VERSION.tar.gz" | tar xvz -C /usr/local
+
+# Creating the softlinks in the system dircctories
+
+RUN ln -s /usr/local/apache-tomcat-7.0.90 $CATALINA_HOME
+
+# Copying the PWD war to inside docker container filesystem 
+
+COPY madhu.war /usr/local/apache-tomcat-7.0.90/webapps
+
+# Exposing the port 
+
+EXPOSE 8080
+
+# Command to run the tomcat server
+
+CMD ["/usr/local/tomcat/bin/catalina.sh", "run"]
