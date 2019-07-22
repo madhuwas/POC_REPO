@@ -1,0 +1,63 @@
+
+Step 1: Download the zipped ubuntu OS in the current working directory
+
+# wget https://partner-images.canonical.com/core/xenial/20190720/ubuntu-xenial-core-cloudimg-amd64-root.tar.gz
+
+Step 2: Create dockerfile with below content 
+
+# vi dockerfile  
+
+==========================================================================================
+
+FROM scratch
+ADD ubuntu-xenial-core-cloudimg-amd64-root.tar.gz /
+RUN rm -rf /var/lib/apt/lists/*
+RUN set -xe \
+
+        \
+        && echo '#!/bin/sh' > /usr/sbin/policy-rc.d \
+        && echo 'exit 101' >> /usr/sbin/policy-rc.d \
+        && chmod +x /usr/sbin/policy-rc.d \
+        \
+        && dpkg-divert --local --rename --add /sbin/initctl \
+        && cp -a /usr/sbin/policy-rc.d /sbin/initctl \
+        && sed -i 's/^exit.*/exit 0/' /sbin/initctl \
+        \
+        && echo 'force-unsafe-io' > /etc/dpkg/dpkg.cfg.d/docker-apt-speedup \
+        \
+        && echo 'DPkg::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' > /etc/apt/apt.conf.d/docker-clean \
+        && echo 'APT::Update::Post-Invoke { "rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*.deb /var/cache/apt/*.bin || true"; };' >> /etc/apt/apt.conf.d/docker-clean \
+        && echo 'Dir::Cache::pkgcache ""; Dir::Cache::srcpkgcache "";' >> /etc/apt/apt.conf.d/docker-clean \
+        \
+        && echo 'Acquire::Languages "none";' > /etc/apt/apt.conf.d/docker-no-languages \
+        \
+        && echo 'Acquire::GzipIndexes "true"; Acquire::CompressionTypes::Order:: "gz";' > /etc/apt/apt.conf.d/docker-gzip-indexes \
+        \
+        && echo 'Apt::AutoRemove::SuggestsImportant "false";' > /etc/apt/apt.conf.d/docker-autoremove-suggests
+RUN mkdir -p /run/systemd && echo 'docker' > /run/systemd/container
+RUN apt-get update && apt-get install -y wget openjdk-8-jdk
+ENV CATALINA_HOME /usr/local/tomcat
+ENV PATH $CATALINA_HOME/bin:$PATH
+ENV TOMCAT_URL https://archive.apache.org/dist/tomcat/tomcat-7/v7.0.90/bin/
+RUN wget -qO- "$TOMCAT_URL/apache-tomcat-$TOMCAT_VERSION.tar.gz" | tar xvz -C /usr/local
+RUN ln -s /usr/local/apache-tomcat-7.0.90 $CATALINA_HOME
+COPY madhu.war /usr/local/apache-tomcat-7.0.90/webapps
+EXPOSE 8080
+CMD ["/usr/local/tomcat/bin/catalina.sh", "run"]
+
+==========================================================================================
+
+
+Step 3: Create a image from the build 
+
+# docker build -t madhudsn/tomee_scratch:v0.1 .
+
+Step 4: Login to docker hub with below credetials 
+
+Step 5: Push the image to docker hub 
+
+# docker push madhudsn/tomee_scratch:v0.1
+
+Step 6: Run the container 
+
+# docker run -d name tomcat -p 9090:8080 madhudsn/tomee_scratch:v0.1
